@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Codex des Blutmondes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=UnifrakturMaguntia&display=swap">
+<style>
+  :root { --bg:#0b0807; --gold:#b8955a; --ink:#e7dcc3; }
+  html,body { margin:0; height:100%; background:var(--bg); overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { image-rendering:pixelated; image-rendering:crisp-edges; display:block; }
+  #touch { position:fixed; inset:0; pointer-events:none; display:none; }
+  #touch.on { display:block; }
+  .tbtn { position:absolute; pointer-events:auto; width:64px; height:64px; border-radius:50%;
+    background:rgba(30,22,18,.55); border:2px solid rgba(184,149,90,.7); color:var(--ink);
+    font:600 20px "Pixelify Sans", monospace; display:flex; align-items:center; justify-content:center; }
+  .tbtn.active { background:rgba(139,30,26,.7); }
+  #dpad { position:absolute; left:max(16px, env(safe-area-inset-left)); bottom:24px; width:192px; height:192px; pointer-events:none; }
+  #dpad .tbtn { border-radius:12px; width:62px; height:62px; }
+  #t-up { left:65px; top:0; } #t-down { left:65px; top:130px; } #t-left { left:0; top:65px; } #t-right { left:130px; top:65px; }
+  #t-a { right:max(24px, env(safe-area-inset-right)); bottom:70px; width:76px; height:76px; }
+  #t-b { right:calc(max(24px, env(safe-area-inset-right)) + 90px); bottom:24px; }
+  #t-menu { right:max(24px, env(safe-area-inset-right)); top:16px; width:52px; height:52px; font-size:16px; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="screen"></canvas></div>
+<div id="touch">
+  <div id="dpad">
+    <div class="tbtn" id="t-up" data-act="up">▲</div>
+    <div class="tbtn" id="t-left" data-act="left">◀</div>
+    <div class="tbtn" id="t-right" data-act="right">▶</div>
+    <div class="tbtn" id="t-down" data-act="down">▼</div>
+  </div>
+  <div class="tbtn" id="t-a" data-act="confirm">A</div>
+  <div class="tbtn" id="t-b" data-act="cancel">B</div>
+  <div class="tbtn" id="t-menu" data-act="menu">☰</div>
+</div>
+<script src="js/core/rng.js"></script>
+<script src="js/core/input.js"></script>
+<script src="js/core/audio.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/state.js"></script>
+<script src="js/data.js"></script>
+<script src="js/gfx/painter.js"></script>
+<script src="js/gfx/sprites.js"></script>
+<script src="js/loot.js"></script>
+<script src="js/dungeon.js"></script>
+<script src="js/scenes/menu.js"></script>
+<script src="js/scenes/create.js"></script>
+<script src="js/scenes/town.js"></script>
+<script src="js/scenes/explore.js"></script>
+<script src="js/scenes/battle.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
