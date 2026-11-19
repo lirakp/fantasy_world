@@ -43,7 +43,7 @@ BM.Flow = {
     run.shopSeed = BM.newSeed();
     BM.refreshQuests(run);
     BM.saveGame(true);
-    BM.go('town');
+    BM.go('town', { at: 'gate' });
     if (ended) BM.msg(BM.t('bm_end'), { title: BM.t('bm_active'), color: BM.C.gold });
   },
   async defeat() {
@@ -63,7 +63,7 @@ BM.Flow = {
     if (D.lootLoss) run.inventory = [];
     for (const c of run.party) { c.alive = true; const s = BM.stats(c); c.hp = Math.max(1, Math.round(s.mhp * 0.5)); c.mp = Math.round(s.mmp * 0.5); }
     BM.saveGame(true);
-    BM.go('town');
+    BM.go('town', { at: 'church' });
     let txt = BM.t('bt_wake_church');
     if (lost) txt += ' (−' + BM.money(lost) + ')';
     if (D.lootLoss) txt += '\n' + BM.t('bt_lost_loot');
@@ -104,27 +104,24 @@ BM.Flow = {
 };
 
 BM.Scenes.town = {
-  enter() {
-    const run = BM.S.run;
+  // p.at: 'gate' (aus dem Dungeon) oder 'church' (nach Niederlage); sonst gespeicherte Position
+  enter(p) {
+    const run = BM.S.run, TM = BM.TownMap;
     if (!run.shopSeed) run.shopSeed = BM.newSeed();
     if (!run.shop || run.shopFor !== run.shopSeed) { run.shop = BM.Loot.shopStock(run.rank, run.shopSeed); run.shopFor = run.shopSeed; }
-    this.t = 0; this.view = null;
+    this.t = 0; this.view = null; this.sub = null; this.anim = null; this.cam = null;
+    const spot = p && p.at ? TM.SPOTS[p.at] : null;
+    if (spot || !run.townPos || !TM.passable(run.townPos.x, run.townPos.y)) run.townPos = Object.assign({ face: 1 }, spot || TM.SPOTS.start);
+    this.trail = [];
     BM.Audio.ambience('town');
-    const go = (v) => () => this.open(v);
-    this.hub = new BM.UI.Menu([
-      { label: () => BM.t('t_guild'), onSelect: go('guild') },
-      { label: () => BM.t('t_board'), onSelect: go('board') },
-      { label: () => BM.t('t_market'), onSelect: go('buy') },
-      { label: () => BM.t('t_church'), onSelect: go('church') },
-      { label: () => BM.t('t_tavern'), onSelect: go('tavern') },
-      { label: () => BM.t('t_party'), onSelect: () => BM.openParty() },
-      { label: () => BM.t('t_menu'), onSelect: () => this.gameMenu() },
-    ], { x: 30, y: 96, w: 280, rowH: 40, size: 19 });
   },
   async gameMenu() {
+    this.busy = true;
     const v = await BM.choice(BM.t('t_menu'), [
-      { label: BM.t('menu_resume'), value: 0 }, { label: BM.t('menu_save'), value: 3 }, { label: BM.t('menu_settings'), value: 1 }, { label: BM.t('menu_title'), value: 2 },
+      { label: BM.t('menu_resume'), value: 0 }, { label: BM.t('t_party'), value: 4 }, { label: BM.t('menu_save'), value: 3 }, { label: BM.t('menu_settings'), value: 1 }, { label: BM.t('menu_title'), value: 2 },
     ], { cancelValue: 0 });
+    this.busy = false;
+    if (v === 4) BM.openParty();
     if (v === 1) BM.go('settings', { back: () => BM.go('town'), bg: (ctx) => this.drawBg(ctx) });
     if (v === 3) { BM.saveGame(true); BM.toast(BM.t('tv_saved')); }
     if (v === 2) { BM.saveGame(true); BM.go('title'); }
@@ -320,37 +317,98 @@ BM.Scenes.town = {
   update(dt) {
     this.t += dt;
     BM.Flow.tick(dt);
-    if (!BM.S.run) return;
-    if (this.sub) this.sub.update();
-    else {
-      this.hub.update();
-      if (BM.Input.pressed('menu')) this.gameMenu();
+    const run = BM.S.run;
+    if (!run || BM.scene !== this) return;
+    if (this.anim) { this.anim.t += dt / 0.13; if (this.anim.t >= 1) this.anim = null; }
+    if (this.sub) { this.sub.update(); return; }
+    if (this.busy) return;
+    const I = BM.Input;
+    if (I.pressed('menu') || I.pressed('cancel')) { this.gameMenu(); return; }
+    if (this.anim) return;
+    for (const [a, dx, dy] of [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0]]) if (I.held(a)) { this.walk(dx, dy, I.pressed(a)); return; }
+    const c = I.takeClick();
+    if (c && this.cam) {
+      const p = run.townPos, TS = BM.TownMap.TS;
+      const tx = Math.floor((c.x + this.cam.x) / TS), ty = Math.floor((c.y + this.cam.y) / TS);
+      const dx = tx - p.x, dy = ty - p.y;
+      if (dx || dy) { if (Math.abs(dx) >= Math.abs(dy)) this.walk(Math.sign(dx), 0, true); else this.walk(0, Math.sign(dy), true); }
+    }
+    // Bestätigen vor einer Tür/einem Stand: ebenfalls betreten
+    if (I.pressed('confirm')) {
+      const p = run.townPos;
+      for (const [dx, dy] of [[0, -1], [p.face, 0], [0, 1], [-p.face, 0]]) if (BM.TownMap.actionAt(p.x + dx, p.y + dy)) { this.walk(dx, dy, true); break; }
     }
   },
-  drawBg(ctx) { ctx.drawImage(BM.Spr.townScene(!!BM.S.run.bloodMoon), 0, 0, BM.W, BM.H); },
+  // Ein Schritt. Anstoßen an Tür, Stand, Aushang oder Tor öffnet die Aktion –
+  // aber nur bei frischem Tastendruck/Klick, damit eine gehaltene Taste nach dem Verlassen nicht sofort wieder öffnet
+  walk(dx, dy, fresh) {
+    const run = BM.S.run, p = run.townPos, TM = BM.TownMap;
+    if (dx) p.face = dx;
+    const nx = p.x + dx, ny = p.y + dy;
+    const a = TM.actionAt(nx, ny);
+    if (a) {
+      if (!fresh) return;
+      if (a.view) { BM.Audio.sfx('door'); this.open(a.view); }
+      else BM.toast(BM.t('t_locked'), BM.C.dim);
+      return;
+    }
+    if (!TM.passable(nx, ny)) return;
+    this.trail.unshift({ x: p.x, y: p.y, face: p.face });
+    if (this.trail.length > 5) this.trail.pop();
+    this.anim = { fx: p.x, fy: p.y, t: 0 };
+    p.x = nx; p.y = ny;
+    BM.Audio.sfx('step');
+  },
+  drawBg(ctx) { this.drawTown(ctx); },
+  drawTown(ctx) {
+    const run = BM.S.run, p = run.townPos, TM = BM.TownMap, TS = TM.TS;
+    const k = this.anim ? this.anim.t : 1;
+    const lerp = (a, b) => a + (b - a) * k;
+    const hx = (this.anim ? lerp(this.anim.fx, p.x) : p.x) * TS, hy = (this.anim ? lerp(this.anim.fy, p.y) : p.y) * TS;
+    const tx = BM.clamp(hx + 16 - BM.W / 2, 0, TM.W * TS - BM.W), ty = BM.clamp(hy + 16 - BM.H / 2 + 20, -46, TM.H * TS - BM.H);
+    if (!this.cam) this.cam = { x: tx, y: ty };
+    this.cam.x += (tx - this.cam.x) * 0.2; this.cam.y += (ty - this.cam.y) * 0.2;
+    const cam = { x: Math.round(this.cam.x), y: Math.round(this.cam.y) };
+    // Held vorne, Gefährten folgen auf seiner Spur
+    const actors = [];
+    const alive = run.party.filter((c) => c.alive);
+    const hero = run.party[0];
+    actors.push({ img: BM.Spr.character(hero), x: hx, y: hy, flip: p.face < 0 });
+    run.party.slice(1).forEach((c, i) => {
+      const to = this.trail[i], from = this.trail[i + 1] || to;
+      if (!to) return;
+      const fx = this.anim ? from.x + (to.x - from.x) * k : to.x, fy = this.anim ? from.y + (to.y - from.y) * k : to.y;
+      actors.push({ img: BM.Spr.character(c), x: fx * TS, y: fy * TS, flip: (to.x - from.x || to.face) < 0, dim: !c.alive });
+    });
+    TM.draw(ctx, cam, actors, this.t, !!run.bloodMoon);
+    if (run.bloodMoon) {
+      ctx.fillStyle = 'rgba(120,0,0,0.22)'; ctx.fillRect(0, 0, BM.W, BM.H);
+      const g = ctx.createRadialGradient(BM.W / 2, BM.H / 2, 200, BM.W / 2, BM.H / 2, 560);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(30,0,0,0.6)'); ctx.fillStyle = g; ctx.fillRect(0, 0, BM.W, BM.H);
+    } else {
+      const g = ctx.createRadialGradient(BM.W / 2, BM.H / 2, 260, BM.W / 2, BM.H / 2, 620);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = g; ctx.fillRect(0, 0, BM.W, BM.H);
+    }
+  },
   draw(ctx) {
     const run = BM.S.run; if (!run) return;
-    this.drawBg(ctx);
+    this.drawTown(ctx);
     BM.drawHud(ctx);
-    BM.UI.panel(ctx, 16, 60, 308, 330, { fill: 'rgba(14,10,8,0.85)' });
-    BM.UI.text(ctx, BM.t('t_town'), 30, 70, { size: 18, color: BM.C.gold2 });
-    if (this.sub) ctx.globalAlpha = 0.55;
-    this.hub.draw(ctx);
-    ctx.globalAlpha = 1;
-    // Trupp-Leiste
+    // Trupp-Leiste unten links
     run.party.forEach((c, i) => {
-      const x = 22 + i * 76, y = 402;
-      BM.UI.panel(ctx, x, y, 72, 124, { fill: 'rgba(14,10,8,0.85)', edge: c.isPlayer ? BM.C.gold : BM.C.edge });
-      ctx.globalAlpha = c.alive ? 1 : 0.35;
-      ctx.drawImage(BM.Spr.character(c), x + 4, y + 6, 64, 64);
-      ctx.globalAlpha = 1;
-      const s = BM.stats(c);
-      BM.UI.text(ctx, c.name, x + 36, y + 72, { size: 12, align: 'center', maxW: 64 });
-      BM.UI.text(ctx, BM.t('p_lv') + ' ' + c.level, x + 36, y + 86, { size: 11, align: 'center', color: BM.C.dim });
-      BM.UI.bar(ctx, x + 8, y + 102, 56, 6, c.hp / s.mhp, BM.C.hp);
-      BM.UI.bar(ctx, x + 8, y + 110, 56, 5, c.mp / s.mmp, BM.C.mp);
+      const x = 10 + i * 150, y = BM.H - 54, s = BM.stats(c);
+      BM.UI.panel(ctx, x, y, 144, 46, { fill: 'rgba(10,7,6,0.82)', edge: c.alive ? BM.C.edge : '#3a1a1a' });
+      BM.UI.text(ctx, c.name + '  ' + BM.t('p_lv') + ' ' + c.level, x + 10, y + 7, { size: 12, color: c.alive ? BM.C.ink : BM.C.mute, maxW: 124 });
+      BM.UI.bar(ctx, x + 10, y + 24, 124, 7, c.hp / s.mhp, BM.C.hp);
+      BM.UI.bar(ctx, x + 10, y + 33, 124, 5, c.mp / s.mmp, BM.C.mp);
     });
+    if (!this.sub) {
+      const hint = BM.t('t_walk_hint'), w = BM.UI.measure(ctx, hint, 13) + 24;
+      BM.UI.panel(ctx, BM.W - w - 10, BM.H - 40, w, 32, { fill: 'rgba(10,7,6,0.75)', edge: BM.C.edge });
+      BM.UI.text(ctx, hint, BM.W - w / 2 - 10, BM.H - 31, { size: 13, align: 'center', color: BM.C.dim });
+    }
     if (this.sub) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 47, BM.W, BM.H - 47);
       BM.UI.panel(ctx, 340, 60, 600, 466);
       BM.UI.text(ctx, this.title, 360, 76, { size: 22, color: BM.C.gold2 });
       let y0 = 112;
