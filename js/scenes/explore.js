@@ -334,7 +334,7 @@ BM.Scenes.explore = {
     // Klick/Tipp auf ein Nachbarfeld
     const c = I.takeClick();
     if (c && this.cam) {
-      const tx = Math.floor((c.x + this.cam.x) / this.TS), ty = Math.floor((c.y + this.cam.y) / this.TS);
+      const tx = Math.floor((c.x / this.ZOOM + this.cam.x) / this.TS), ty = Math.floor((c.y / this.ZOOM + this.cam.y) / this.TS);
       const dx = Math.sign(tx - this.m.px), dy = Math.sign(ty - this.m.py);
       if (Math.abs(tx - this.m.px) >= Math.abs(ty - this.m.py) && dx) { this.runAsync(() => this.tryMove(dx, 0)); return; }
       if (dy) { this.runAsync(() => this.tryMove(0, dy)); return; }
@@ -354,20 +354,23 @@ BM.Scenes.explore = {
     try { await fn(); } finally { this.busy = false; }
   },
 
+  ZOOM: 2, // Spielwelt doppelt so groß: jedes Grafik-Pixel = 2×2 Bildpunkte
   draw(ctx, still) {
-    const m = this.m, d = this.d, TS = this.TS, run = BM.S.run;
+    const m = this.m, d = this.d, TS = this.TS, run = BM.S.run, Z = this.ZOOM;
+    const VW = BM.W / Z, VH = BM.H / Z;
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, BM.W, BM.H);
     // Kamera
     let px = m.px, py = m.py;
     if (this.anim) { const k = this.anim.t; px = this.anim.fx + (m.px - this.anim.fx) * k; py = this.anim.fy + (m.py - this.anim.fy) * k; }
-    const tx = px * TS + TS / 2 - BM.W / 2, ty = py * TS + TS / 2 - BM.H / 2 - 20;
+    const tx = px * TS + TS / 2 - VW / 2, ty = py * TS + TS / 2 - VH / 2 - 6;
     if (!this.cam) this.cam = { x: tx, y: ty };
     this.cam.x += (tx - this.cam.x) * 0.25; this.cam.y += (ty - this.cam.y) * 0.25;
     let sx = 0, sy = 0;
-    if (this.shake > 0 && BM.S.settings.shake) { sx = (Math.random() - 0.5) * 12 * this.shake; sy = (Math.random() - 0.5) * 12 * this.shake; }
+    if (this.shake > 0 && BM.S.settings.shake) { sx = (Math.random() - 0.5) * 6 * this.shake; sy = (Math.random() - 0.5) * 6 * this.shake; }
     const cx = Math.round(this.cam.x + sx), cy = Math.round(this.cam.y + sy);
     const x0 = Math.max(0, Math.floor(cx / TS)), y0 = Math.max(0, Math.floor(cy / TS));
-    const x1 = Math.min(m.w - 1, Math.ceil((cx + BM.W) / TS)), y1 = Math.min(m.h - 1, Math.ceil((cy + BM.H) / TS));
+    const x1 = Math.min(m.w - 1, Math.ceil((cx + VW) / TS)), y1 = Math.min(m.h - 1, Math.ceil((cy + VH) / TS));
+    ctx.save(); ctx.scale(Z, Z);
     const pal = BM.PAL[d.type];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const k = y * m.w + x;
@@ -400,35 +403,38 @@ BM.Scenes.explore = {
       if (!this.vis.has(mon.y * m.w + mon.x)) continue;
       const X = mon.x * TS - cx, Y = mon.y * TS - cy, bob = Math.round(Math.sin(this.t * 4 + mon.x) * 1.5);
       if (mon.boss) {
-        ctx.fillStyle = 'rgba(200,30,30,' + (0.25 + Math.sin(this.t * 3) * 0.1) + ')';
-        ctx.beginPath(); ctx.arc(X + 16, Y + 16, 26, 0, Math.PI * 2); ctx.fill();
-        ctx.drawImage(BM.Spr.monster(mon.pack[0]), X - 12, Y - 20 + bob, 56, 56);
+        BM.UI.shadow(ctx, X + 16, Y + 20, 24, 14, 0.3 + (Math.sin(this.t * 3) > 0 ? 0.1 : 0), '200,30,30');
+        ctx.drawImage(BM.Spr.monster(mon.pack[0]), X - 16, Y - 30 + bob, 64, 64);
       } else {
         ctx.drawImage(BM.Spr.monster(mon.pack[0]), X, Y + bob);
-        if (mon.pack.length > 1) BM.UI.text(ctx, '×' + mon.pack.length, X + 30, Y - 4, { size: 11, align: 'right', color: '#ff8070' });
+        if (mon.pack.length > 1) BM.UI.text(ctx, '×' + mon.pack.length, X + 31, Y - 3, { size: 8, align: 'right', color: '#ff8070' });
       }
-      if (mon.stun > 0) BM.UI.text(ctx, 'z', X + 24, Y - 6, { size: 12, color: '#a0c0ff' });
+      if (mon.stun > 0) BM.UI.text(ctx, 'z', X + 24, Y - 5, { size: 8, color: '#a0c0ff' });
     }
     // Spieler
     const hero = run.party.find((c) => c.alive) || run.party[0];
     const HX = Math.round(px * TS - cx), HY = Math.round(py * TS - cy) - 4;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(HX + 16, HY + 33, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+    BM.UI.shadow(ctx, HX + 16, HY + 33, 10, 3, 0.35);
     ctx.save();
     if (this.facing < 0) { ctx.translate(HX + 32, HY); ctx.scale(-1, 1); ctx.drawImage(BM.Spr.character(hero), 0, 0); }
     else ctx.drawImage(BM.Spr.character(hero), HX, HY);
     ctx.restore();
-    // Nebel über gesehenen, aber nicht sichtbaren Feldern
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const k = y * m.w + x; if (m.seen[k] && !this.vis.has(k)) ctx.fillRect(x * TS - cx, y * TS - cy, TS, TS); }
-    // Licht
-    const lx = HX + 16, ly = HY + 18;
-    const g = ctx.createRadialGradient(lx, ly, 70, lx, ly, 240);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.72)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, BM.W, BM.H);
+    // Licht in harten Dither-Stufen (Pixel-Art statt weichem Verlauf):
+    // nahe = hell, weiter weg = 25/50/75 % Schattenpunkte, nur erinnert = 75 % + abgedunkelt
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const k = y * m.w + x;
+      if (!m.seen[k]) continue;
+      const X = x * TS - cx, Y = y * TS - cy;
+      if (!this.vis.has(k)) { ctx.drawImage(BM.Spr.dither(3), X, Y); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(X, Y, TS, TS); continue; }
+      const dist = Math.hypot(x - px, y - py);
+      const lvl = dist < 2.6 ? 0 : dist < 3.8 ? 1 : dist < 5 ? 2 : 3;
+      if (lvl) ctx.drawImage(BM.Spr.dither(lvl), X, Y);
+    }
     const tint = { physical: 'rgba(255,170,90,0.04)', thorn: 'rgba(60,120,40,0.08)', blood: 'rgba(170,10,20,0.12)', memory: 'rgba(90,110,220,0.1)' }[d.type];
-    ctx.fillStyle = tint; ctx.fillRect(0, 0, BM.W, BM.H);
-    if (run.bloodMoon) { ctx.fillStyle = 'rgba(150,0,0,0.08)'; ctx.fillRect(0, 0, BM.W, BM.H); }
-    if (this.flash > 0) { ctx.fillStyle = (BM.gore() ? 'rgba(180,0,0,' : 'rgba(255,255,255,') + (this.flash * 0.5) + ')'; ctx.fillRect(0, 0, BM.W, BM.H); }
+    ctx.fillStyle = tint; ctx.fillRect(0, 0, VW, VH);
+    if (run.bloodMoon) { ctx.fillStyle = 'rgba(150,0,0,0.08)'; ctx.fillRect(0, 0, VW, VH); }
+    if (this.flash > 0) { ctx.fillStyle = (BM.gore() ? 'rgba(180,0,0,' : 'rgba(255,255,255,') + (Math.ceil(this.flash * 4) / 8) + ')'; ctx.fillRect(0, 0, VW, VH); }
+    ctx.restore();
     if (still) return;
     // HUD
     BM.drawHud(ctx);

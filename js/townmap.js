@@ -186,9 +186,19 @@ BM.TownMap = (function () {
   const actionAt = (x, y) => (x >= 0 && y >= 0 && x < W && y < H ? act[y * W + x] : null);
 
   // Zeichnet die Stadt; actors: [{img, x, y, flip}] in Pixelkoordinaten
-  function draw(ctx, cam, actors, t, bm) {
+  // Laternenschein als Pixel-Lichthof in harten Ringen
+  function glow(bm) {
+    return memo('glow|' + bm, () => {
+      const P = new BM.Painter(64, 64), col = bm ? '#ff8c3c' : '#ffdc8c';
+      P.circle(32, 32, 30, col, bm ? 0.1 : 0.07); P.circle(32, 32, 21, col, bm ? 0.12 : 0.09); P.circle(32, 32, 12, col, bm ? 0.16 : 0.12);
+      return P.canvas();
+    });
+  }
+
+  function draw(ctx, cam, actors, t, bm, VW, VH) {
+    VW = VW || BM.W; VH = VH || BM.H;
     const x0 = Math.max(0, Math.floor(cam.x / TS)), y0 = Math.max(0, Math.floor(cam.y / TS));
-    const x1 = Math.min(W - 1, Math.ceil((cam.x + BM.W) / TS)), y1 = Math.min(H - 1, Math.ceil((cam.y + BM.H) / TS));
+    const x1 = Math.min(W - 1, Math.ceil((cam.x + VW) / TS)), y1 = Math.min(H - 1, Math.ceil((cam.y + VH) / TS));
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const g = ground[y * W + x], v = (((x * 73856093) ^ (y * 19349663)) >>> 0) % 4;
       ctx.drawImage(groundTile(g, v), x * TS - cam.x, y * TS - cam.y);
@@ -201,7 +211,7 @@ BM.TownMap = (function () {
       list.push({ z: p.y + 1, f: () => ctx.drawImage(img, p.x * TS - cam.x, (p.y + 1) * TS - img.height - cam.y) });
     }
     for (const a of actors) list.push({ z: a.y / TS + 1.01, f: () => {
-      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(a.x - cam.x + 16, a.y - cam.y + 30, 9, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+      BM.UI.shadow(ctx, a.x - cam.x + 16, a.y - cam.y + 30, 9, 3, 0.3);
       ctx.save();
       if (a.flip) { ctx.translate(a.x - cam.x + 32, a.y - cam.y - 4); ctx.scale(-1, 1); ctx.drawImage(a.img, 0, 0); }
       else ctx.drawImage(a.img, a.x - cam.x, a.y - cam.y - 4);
@@ -210,23 +220,17 @@ BM.TownMap = (function () {
     list.sort((a, b) => a.z - b.z).forEach((e) => e.f());
     // Laternenschein
     for (const p of PROPS) if (p.kind === 'lamp') {
-      const lx = p.x * TS - cam.x + 16, ly = p.y * TS - cam.y - 6;
-      const g = ctx.createRadialGradient(lx, ly, 2, lx, ly, bm ? 60 : 36);
-      g.addColorStop(0, bm ? 'rgba(255,140,60,0.35)' : 'rgba(255,220,140,0.22)'); g.addColorStop(1, 'rgba(255,200,120,0)');
-      ctx.fillStyle = g; ctx.fillRect(lx - 60, ly - 60, 120, 120);
+      ctx.drawImage(glow(bm), p.x * TS - cam.x - 16, p.y * TS - cam.y - 38);
     }
-    // Schilder über den Türen
-    for (const b of BUILDINGS) if (b.label) {
-      const sx = (b.x + b.door) * TS - cam.x + 16, sy = (b.y + b.h) * TS - cam.y - 58;
-      const txt = BM.t(b.label).replace(/ „.*“| ".*"/, '');
-      const tw = BM.UI.measure(ctx, txt, 12) + 12;
-      ctx.fillStyle = 'rgba(16,11,9,0.75)'; ctx.fillRect(sx - tw / 2, sy, tw, 18);
-      BM.UI.text(ctx, txt, sx, sy + 3, { size: 12, align: 'center', color: BM.C.gold2, shadow: false });
-    }
-    const gx = 12 * TS - cam.x, gy = 19 * TS - cam.y + 8;
-    const gt = BM.t('t_gate'), gw = BM.UI.measure(ctx, gt, 12) + 12;
-    ctx.fillStyle = 'rgba(16,11,9,0.75)'; ctx.fillRect(gx - gw / 2, gy, gw, 18);
-    BM.UI.text(ctx, gt, gx, gy + 3, { size: 12, align: 'center', color: BM.C.gold2, shadow: false });
+    // Schilder über den Türen (kleine Pixel-Schrift, wird mit der Welt vergrößert)
+    const sign = (txt, sx, sy) => {
+      const tw = Math.ceil(BM.UI.measure(ctx, txt, 8)) + 8;
+      ctx.fillStyle = '#100b09'; ctx.fillRect(Math.round(sx - tw / 2), Math.round(sy), tw, 11);
+      ctx.fillStyle = '#5a4630'; ctx.fillRect(Math.round(sx - tw / 2), Math.round(sy) + 11, tw, 1);
+      BM.UI.text(ctx, txt, sx, sy + 1, { size: 8, align: 'center', color: BM.C.gold2, shadow: false });
+    };
+    for (const b of BUILDINGS) if (b.label) sign(BM.t(b.label).replace(/ „.*“| ".*"/, ''), (b.x + b.door) * TS - cam.x + 16, (b.y + b.h) * TS - cam.y - 52);
+    sign(BM.t('t_gate'), 12 * TS - cam.x, 19 * TS - cam.y + 12);
   }
 
   return { W, H, TS, BUILDINGS, PROPS, SPOTS, passable, actionAt, draw, clear: () => cache.clear() };

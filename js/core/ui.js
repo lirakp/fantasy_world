@@ -17,18 +17,58 @@ BM.UI = (function () {
     ctx.font = (weight || '400') + ' ' + size + 'px ' + (family === 'goth' ? GOTH : PIX);
   }
 
+  // ---- Pixel-Text: Schrift wird ohne Kantenglättung auf ganze Pixel gesetzt (Ergebnis wird zwischengespeichert) ----
+  const tcache = new Map();
+  const mctx = document.createElement('canvas').getContext('2d');
+  function rasterText(str, size, family, weight, color) {
+    const key = size + '|' + (family || '') + '|' + (weight || '') + '|' + color + '|' + str;
+    let e = tcache.get(key);
+    if (e) return e;
+    if (tcache.size > 1500) tcache.clear();
+    setFont(mctx, size, family, weight);
+    const w = Math.ceil(mctx.measureText(str).width) + 4, h = Math.ceil(size * 1.45) + 4;
+    const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = h;
+    const g = c.getContext('2d');
+    setFont(g, size, family, weight); g.textBaseline = 'top'; g.fillStyle = color; g.fillText(str, 2, 2);
+    const img = g.getImageData(0, 0, c.width, h), d = img.data;
+    const rgb = BM.Color.parse(color.startsWith('#') ? color : '#ffffff');
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] >= 96) { d[i] = rgb[0]; d[i + 1] = rgb[1]; d[i + 2] = rgb[2]; d[i + 3] = 255; } else d[i + 3] = 0;
+    }
+    g.putImageData(img, 0, 0);
+    e = { c, w: w - 4 };
+    tcache.set(key, e);
+    return e;
+  }
+
   function text(ctx, str, x, y, o) {
     o = o || {};
-    setFont(ctx, o.size || 16, o.font, o.weight);
-    ctx.textAlign = o.align || 'left';
-    ctx.textBaseline = o.baseline || 'top';
     str = String(str);
+    let size = o.size || 16;
+    // Zu breit? Dann kleinere Schrift statt Stauchen (Stauchen zerstört die Pixel)
+    if (o.maxW) { setFont(mctx, size, o.font, o.weight); while (size > 8 && mctx.measureText(str).width > o.maxW) { size--; setFont(mctx, size, o.font, o.weight); } }
+    const col = o.color || BM.C.ink;
+    const t = rasterText(str, size, o.font, o.weight, col.startsWith('#') ? col : '#e7dcc3');
+    const align = o.align || 'left';
+    const ox = Math.round(align === 'center' ? x - t.w / 2 : align === 'right' ? x - t.w : x) - 2;
+    const oy = Math.round(y) - 2;
     if (o.shadow !== false) {
-      ctx.fillStyle = 'rgba(0,0,0,0.75)';
-      ctx.fillText(str, x + 1, y + 2, o.maxW);
+      const s = rasterText(str, size, o.font, o.weight, '#000000');
+      const a = ctx.globalAlpha; ctx.globalAlpha = a * 0.8;
+      ctx.drawImage(s.c, ox + 1, oy + 1);
+      ctx.globalAlpha = a;
     }
-    ctx.fillStyle = o.color || BM.C.ink;
-    ctx.fillText(str, x, y, o.maxW);
+    ctx.drawImage(t.c, ox, oy);
+  }
+
+  // Pixel-Schatten (Ellipse aus ganzen Pixeln statt geglätteter Form)
+  function shadow(ctx, cx, cy, rx, ry, alpha, rgb) {
+    ctx.fillStyle = 'rgba(' + (rgb || '0,0,0') + ',' + (alpha || 0.35) + ')';
+    cx = Math.round(cx); cy = Math.round(cy);
+    for (let dy = -Math.floor(ry); dy <= Math.floor(ry); dy++) {
+      const hw = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy * dy) / (ry * ry))));
+      if (hw > 0) ctx.fillRect(cx - hw, cy + dy, hw * 2, 1);
+    }
   }
 
   function measure(ctx, str, size, font) { setFont(ctx, size || 16, font); return ctx.measureText(String(str)).width; }
@@ -57,23 +97,28 @@ BM.UI = (function () {
     return lines.length * lh;
   }
 
+  // Pixel-Rahmen: dunkle Kante, Goldleiste mit Licht oben/links und Schatten unten/rechts, Eckbeschläge
   function panel(ctx, x, y, w, h, o) {
     o = o || {};
-    ctx.fillStyle = o.fill || 'rgba(16,11,9,0.92)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = o.edge || BM.C.gold;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
-    ctx.strokeStyle = o.inner || 'rgba(184,149,90,0.35)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 5.5, y + 5.5, w - 11, h - 11);
-    // Eckverzierung
-    ctx.fillStyle = o.edge || BM.C.gold;
-    for (const [cx, cy] of [[x, y], [x + w - 6, y], [x, y + h - 6], [x + w - 6, y + h - 6]]) ctx.fillRect(cx, cy, 6, 6);
+    x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+    const edge = o.edge || BM.C.gold;
+    const hi = BM.Color.shade(edge.startsWith('#') ? edge : BM.C.gold, 0.35), lo = BM.Color.shade(edge.startsWith('#') ? edge : BM.C.gold, -0.45);
+    const R = (c, a, b, cw, ch) => { ctx.fillStyle = c; ctx.fillRect(a, b, cw, ch); };
+    R(o.fill || 'rgba(16,11,9,0.92)', x + 2, y + 2, w - 4, h - 4);
+    R('#050303', x, y + 2, 1, h - 4); R('#050303', x + w - 1, y + 2, 1, h - 4); R('#050303', x + 2, y, w - 4, 1); R('#050303', x + 2, y + h - 1, w - 4, 1);
+    R(edge, x + 1, y + 1, w - 2, 2); R(edge, x + 1, y + h - 3, w - 2, 2); R(edge, x + 1, y + 1, 2, h - 2); R(edge, x + w - 3, y + 1, 2, h - 2);
+    R(hi, x + 2, y + 1, w - 4, 1); R(hi, x + 1, y + 2, 1, h - 4);
+    R(lo, x + 2, y + h - 2, w - 4, 1); R(lo, x + w - 2, y + 2, 1, h - 4);
+    R('rgba(0,0,0,0.55)', x + 3, y + 3, w - 6, 1); R('rgba(0,0,0,0.55)', x + 3, y + 3, 1, h - 6);
+    R(o.inner || 'rgba(184,149,90,0.28)', x + 6, y + 6, w - 12, 1); R(o.inner || 'rgba(184,149,90,0.28)', x + 6, y + h - 7, w - 12, 1);
+    R(o.inner || 'rgba(184,149,90,0.28)', x + 6, y + 7, 1, h - 14); R(o.inner || 'rgba(184,149,90,0.28)', x + w - 7, y + 7, 1, h - 14);
+    // Eckbeschläge
+    for (const [cx, cy] of [[x, y], [x + w - 6, y], [x, y + h - 6], [x + w - 6, y + h - 6]]) { R(lo, cx, cy, 6, 6); R(edge, cx + 1, cy + 1, 4, 4); R(hi, cx + 1, cy + 1, 2, 2); }
   }
 
   function bar(ctx, x, y, w, h, ratio, color, back) {
     ratio = BM.clamp(ratio || 0, 0, 1);
+    x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
     ctx.fillStyle = back || '#120c0a'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = color; ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * ratio), h - 2);
     ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * ratio), Math.max(1, (h - 2) >> 2));
@@ -166,7 +211,7 @@ BM.UI = (function () {
     }
   }
 
-  return { text, measure, wrap, textBlock, panel, bar, Menu, inRect, setFont };
+  return { text, measure, wrap, textBlock, panel, bar, Menu, inRect, setFont, shadow };
 })();
 
 // Overlays: Nachrichten, Auswahl-Dialoge, Einblendungen

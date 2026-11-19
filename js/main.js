@@ -1,17 +1,23 @@
 // Start, Skalierung, Hauptschleife und Szenenwechsel
 (function () {
+  // Das Spiel wird immer in fester Pixel-Auflösung (960×540) in einen Puffer gezeichnet
+  // und dann ohne Glättung hochskaliert – so liegt alles auf demselben Pixel-Raster.
   const canvas = document.getElementById('screen');
-  const ctx = canvas.getContext('2d');
+  const screen = canvas.getContext('2d');
+  const buf = document.createElement('canvas');
+  buf.width = BM.W; buf.height = BM.H;
+  const ctx = buf.getContext('2d');
   BM.ctx = ctx;
 
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const s = Math.min(window.innerWidth / BM.W, window.innerHeight / BM.H);
-    canvas.style.width = Math.floor(BM.W * s) + 'px';
-    canvas.style.height = Math.floor(BM.H * s) + 'px';
-    canvas.width = Math.floor(BM.W * s * dpr);
-    canvas.height = Math.floor(BM.H * s * dpr);
-    BM.scale = s * dpr;
+    const dpr = window.devicePixelRatio || 1;
+    const fit = Math.min(window.innerWidth * dpr / BM.W, window.innerHeight * dpr / BM.H);
+    // Ganzzahlige Vergrößerung, wenn sie das Fenster gut füllt; sonst exakt einpassen
+    const k = fit >= 1 && Math.floor(fit) / fit > 0.85 ? Math.floor(fit) : fit;
+    canvas.width = Math.round(BM.W * k);
+    canvas.height = Math.round(BM.H * k);
+    canvas.style.width = (canvas.width / dpr) + 'px';
+    canvas.style.height = (canvas.height / dpr) + 'px';
   }
   window.addEventListener('resize', resize);
 
@@ -46,11 +52,13 @@
       if (BM.Overlays.active()) BM.Overlays.update(dt);
       else if (BM.scene) BM.scene.update(dt);
       BM.Overlays.tickToasts(dt);
-      ctx.setTransform(BM.scale, 0, 0, BM.scale, 0, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = BM.C.bg; ctx.fillRect(0, 0, BM.W, BM.H);
       if (BM.scene) BM.scene.draw(ctx);
       BM.Overlays.draw(ctx);
+      screen.imageSmoothingEnabled = false;
+      screen.drawImage(buf, 0, 0, canvas.width, canvas.height);
       touchVisible();
     } catch (e) {
       console.error(e);

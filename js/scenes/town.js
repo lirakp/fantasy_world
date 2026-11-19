@@ -398,7 +398,7 @@ BM.Scenes.town = {
     const c = I.takeClick();
     if (c && this.cam) {
       const p = run.townPos, TS = BM.TownMap.TS;
-      const tx = Math.floor((c.x + this.cam.x) / TS), ty = Math.floor((c.y + this.cam.y) / TS);
+      const tx = Math.floor((c.x / this.ZOOM + this.cam.x) / TS), ty = Math.floor((c.y / this.ZOOM + this.cam.y) / TS);
       const dx = tx - p.x, dy = ty - p.y;
       if (dx || dy) { if (Math.abs(dx) >= Math.abs(dy)) this.walk(Math.sign(dx), 0, true); else this.walk(0, Math.sign(dy), true); }
     }
@@ -434,7 +434,8 @@ BM.Scenes.town = {
     const k = this.anim ? this.anim.t : 1;
     const lerp = (a, b) => a + (b - a) * k;
     const hx = (this.anim ? lerp(this.anim.fx, p.x) : p.x) * TS, hy = (this.anim ? lerp(this.anim.fy, p.y) : p.y) * TS;
-    const tx = BM.clamp(hx + 16 - BM.W / 2, 0, TM.W * TS - BM.W), ty = BM.clamp(hy + 16 - BM.H / 2 + 20, -46, TM.H * TS - BM.H);
+    const Z = this.ZOOM, VW = BM.W / Z, VH = BM.H / Z;
+    const tx = BM.clamp(hx + 16 - VW / 2, 0, TM.W * TS - VW), ty = BM.clamp(hy + 16 - VH / 2 + 8, -24, TM.H * TS - VH + 28);
     if (!this.cam) this.cam = { x: tx, y: ty };
     this.cam.x += (tx - this.cam.x) * 0.2; this.cam.y += (ty - this.cam.y) * 0.2;
     const cam = { x: Math.round(this.cam.x), y: Math.round(this.cam.y) };
@@ -449,16 +450,17 @@ BM.Scenes.town = {
       const fx = this.anim ? from.x + (to.x - from.x) * k : to.x, fy = this.anim ? from.y + (to.y - from.y) * k : to.y;
       actors.push({ img: BM.Spr.character(c), x: fx * TS, y: fy * TS, flip: (to.x - from.x || to.face) < 0, dim: !c.alive });
     });
-    TM.draw(ctx, cam, actors, this.t, !!run.bloodMoon);
+    ctx.save(); ctx.scale(Z, Z);
+    TM.draw(ctx, cam, actors, this.t, !!run.bloodMoon, VW, VH);
     if (run.bloodMoon) {
-      ctx.fillStyle = 'rgba(120,0,0,0.22)'; ctx.fillRect(0, 0, BM.W, BM.H);
-      const g = ctx.createRadialGradient(BM.W / 2, BM.H / 2, 200, BM.W / 2, BM.H / 2, 560);
-      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(30,0,0,0.6)'); ctx.fillStyle = g; ctx.fillRect(0, 0, BM.W, BM.H);
-    } else {
-      const g = ctx.createRadialGradient(BM.W / 2, BM.H / 2, 260, BM.W / 2, BM.H / 2, 620);
-      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = g; ctx.fillRect(0, 0, BM.W, BM.H);
+      // Blutmond: rote Tönung, Ränder mit rotem Dither statt weichem Verlauf
+      ctx.fillStyle = 'rgba(120,0,0,0.24)'; ctx.fillRect(0, 0, VW, VH);
+      for (let x = 0; x < VW; x += 32) { ctx.drawImage(BM.Spr.dither(2, '40,0,0'), x, 0); ctx.drawImage(BM.Spr.dither(2, '40,0,0'), x, VH - 32); }
+      for (let y = 32; y < VH - 32; y += 32) { ctx.drawImage(BM.Spr.dither(2, '40,0,0'), 0, y); ctx.drawImage(BM.Spr.dither(2, '40,0,0'), VW - 32, y); }
     }
+    ctx.restore();
   },
+  ZOOM: 2,
   draw(ctx) {
     const run = BM.S.run; if (!run) return;
     this.drawTown(ctx);

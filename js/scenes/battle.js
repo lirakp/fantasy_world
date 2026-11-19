@@ -39,8 +39,8 @@ BM.Scenes.battle = {
   layout() {
     const n = this.enemies.length;
     this.enemies.forEach((e, i) => {
-      if (e.boss) { e.x = 120; e.y = 90; e.size = 200; }
-      else { e.size = 104; e.x = 120 + (i % 2) * 130 + (n === 1 ? 60 : 0); e.y = 60 + i * 72 + (n <= 2 ? 50 : 0); if (this.enemies[0].boss) { e.x = 330; e.y = 60 + (i - 1) * 100; } }
+      if (e.boss) { e.x = 120; e.y = 90; e.size = 192; }
+      else { e.size = 96; e.x = 120 + (i % 2) * 130 + (n === 1 ? 60 : 0); e.y = 60 + i * 72 + (n <= 2 ? 50 : 0); if (this.enemies[0].boss) { e.x = 330; e.y = 60 + (i - 1) * 100; } }
     });
     this.party.forEach((u, i) => { u.size = 96; u.x = 700 - (i % 2) * 60; u.y = 50 + i * 78; });
   },
@@ -373,11 +373,12 @@ BM.Scenes.battle = {
 
   drawUnit(ctx, u) {
     const img = u.side === 'enemy' ? BM.Spr.monster(u.id) : BM.Spr.character(u.c);
-    const bob = u.alive ? Math.sin(this.t * 3 + u.idx) * 2 : 0;
+    const g3 = (v) => Math.round(v / 3) * 3; // auf das 3×-Raster des Hintergrunds einrasten
+    const bob = u.alive && Math.sin(this.t * 3 + u.idx) > 0.2 ? -3 : 0;
     let dx = 0;
     if (u.lunge > 0) dx = (u.side === 'enemy' ? 1 : -1) * Math.sin((0.25 - u.lunge) / 0.25 * Math.PI) * 30;
-    const x = u.x + dx, y = u.y + bob;
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(u.x + u.size / 2, u.y + u.size * 0.97, u.size * 0.32, u.size * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+    const x = g3(u.x + dx), y = g3(u.y) + bob;
+    BM.UI.shadow(ctx, u.x + u.size / 2, u.y + u.size * 0.95, u.size * 0.32, u.size * 0.08, 0.4);
     ctx.save();
     if (u.side === 'enemy') ctx.globalAlpha = u.fade;
     if (u.flash > 0) ctx.filter = 'brightness(3)';
@@ -402,8 +403,8 @@ BM.Scenes.battle = {
   draw(ctx) {
     let sx = 0, sy = 0;
     if (this.shake > 0 && BM.S.settings.shake) { sx = (Math.random() - 0.5) * 14 * this.shake * 3; sy = (Math.random() - 0.5) * 14 * this.shake * 3; }
-    ctx.save(); ctx.translate(sx, sy);
-    ctx.drawImage(BM.Spr.battleBg(this.p.dtype), -10, -10, BM.W + 20, BM.H + 20);
+    ctx.save(); ctx.translate(Math.round(sx / 3) * 3, Math.round(sy / 3) * 3);
+    ctx.drawImage(BM.Spr.battleBg(this.p.dtype), 0, 0, BM.W, BM.H);
     if (BM.S.run && BM.S.run.bloodMoon) { ctx.fillStyle = 'rgba(150,0,0,0.12)'; ctx.fillRect(0, 0, BM.W, BM.H); }
     for (const e of this.enemies) if (e.fade > 0) this.drawUnit(ctx, e);
     for (const u of this.party) this.drawUnit(ctx, u);
@@ -411,7 +412,7 @@ BM.Scenes.battle = {
     const mark = (u, col) => { const y = u.y - 14 + Math.sin(this.t * 6) * 3; ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(u.x + u.size / 2 - 8, y); ctx.lineTo(u.x + u.size / 2 + 8, y); ctx.lineTo(u.x + u.size / 2, y + 10); ctx.fill(); };
     if (this.active && this.active.alive && this.cmd) mark(this.active, BM.C.gold2);
     if (this.targeting) mark(this.targeting.list[this.targeting.sel], this.targeting.side === 'enemy' ? '#ff4040' : '#7aff9a');
-    for (const p of this.parts) { ctx.fillStyle = p.c; ctx.globalAlpha = Math.min(1, p.t * 2); ctx.fillRect(p.x, p.y, p.s, p.s); }
+    for (const p of this.parts) { ctx.fillStyle = p.c; ctx.globalAlpha = Math.min(1, p.t * 2); ctx.fillRect(Math.round(p.x / 3) * 3, Math.round(p.y / 3) * 3, 3, 3); }
     ctx.globalAlpha = 1;
     for (const f of this.floats) { ctx.globalAlpha = Math.min(1, f.t * 2); BM.UI.text(ctx, f.text, f.x, f.y, { size: f.big ? 28 : 20, align: 'center', color: f.color, weight: '600' }); }
     ctx.globalAlpha = 1;

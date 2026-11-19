@@ -524,22 +524,58 @@ BM.Spr = (function () {
     return P.canvas();
   }); }
 
-  function battleBg(dtype) { return memo('bbg|' + dtype + '|' + BM.gore(), (rng) => {
-    const p = PAL[dtype] || PAL.physical, P = new BM.Painter(240, 135);
-    for (let y = 0; y < 70; y++) P.hline(0, 239, y, C.mix(p.dark, p.wall, y / 90));
-    for (let row = 0; row < 9; row++) { const yy = row * 8, o = row % 2 ? 6 : 0; P.hline(0, 239, yy, p.dark, 0.6); for (let x = o; x < 240; x += 12) P.vline(x, yy, yy + 7, p.dark, 0.5); }
-    for (let y = 70; y < 135; y++) P.hline(0, 239, y, C.mix(p.floor, p.dark, (y - 70) / 80));
-    for (let y = 72; y < 135; y += 6 + Math.floor((y - 70) / 10)) P.hline(0, 239, y, p.dark, 0.5);
-    for (let k = -10; k <= 10; k++) P.line(120 + k * 6, 70, 120 + k * 40, 134, p.dark, 0.35);
-    P.noise(rng, 0.06);
-    if (dtype === 'thorn') for (let i = 0; i < 14; i++) { let x = rng.int(0, 239), y = 0; while (y < 68) { x += rng.int(-1, 1); P.set(x, y, '#2e4a22'); if (y % 6 === 0) P.set(x + 1, y, '#c8c090'); y++; } }
-    if (dtype === 'blood') { for (let i = 0; i < 10; i++) { const x = rng.int(0, 239); P.vline(x, 0, rng.int(10, 50), BM.gore() ? '#6a0c10' : '#3a1418'); } P.ellipse(120, 110, 90, 12, BM.gore() ? '#4a0a0c' : '#2a1416', 0.5); }
-    if (dtype === 'memory') for (let i = 0; i < 40; i++) P.set(rng.int(0, 239), rng.int(0, 134), rng.pick(['#9ad0ff', '#c0a0ff', '#ffffff']), rng.range(0.2, 0.7));
-    for (const x of [40, 200]) { P.rect(x, 30, 2, 8, '#4a3018'); P.circle(x + 1, 28, 3, '#ff9a30', 0.85); P.circle(x + 1, 28, 7, '#ff9a30', 0.15); }
+  // Kampfhintergrund 320×180, wird genau 3× vergrößert – dasselbe Raster wie die Kämpfer (32 px × 3)
+  function battleBg(dtype) { return memo('bbg2|' + dtype + '|' + BM.gore(), (rng) => {
+    const p = PAL[dtype] || PAL.physical, W = 320, H = 180, HZ = 92, P = new BM.Painter(W, H);
+    const B = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+    // Farbverlauf in harten Stufen mit Dither-Übergängen (statt weicher Mischung)
+    const band = (x, y, t, a, b, steps) => {
+      const v = t * steps, lo = Math.floor(v), f = v - lo;
+      const k = Math.min(steps, lo + (B[y % 4][x % 4] / 16 < f ? 1 : 0));
+      return C.mix(a, b, k / steps);
+    };
+    for (let y = 0; y < HZ; y++) for (let x = 0; x < W; x++) P.set(x, y, band(x, y, y / HZ, p.dark, p.wall, 4));
+    // Mauersteine mit Licht- und Schattenkante
+    for (let row = 0; row * 10 < HZ; row++) {
+      const yy = row * 10, o = row % 2 ? 9 : 0;
+      P.hline(0, W - 1, yy, p.dark);
+      for (let x = o - 18; x < W; x += 18) {
+        P.vline(x, yy, yy + 9, p.dark);
+        P.hline(x + 1, x + 16, yy + 1, C.shade(p.wallT, -0.1 - (HZ - yy) / HZ * 0.4), 0.7);
+        P.vline(x + 17, yy + 2, yy + 9, p.dark, 0.5);
+      }
+    }
+    // Boden: Platten in Perspektive, Stufen-Verlauf nach vorn
+    for (let y = HZ; y < H; y++) for (let x = 0; x < W; x++) P.set(x, y, band(x, y, (y - HZ) / (H - HZ), p.floor, C.shade(p.floor, -0.45), 3));
+    let yy = HZ + 3, step = 6;
+    while (yy < H) { P.hline(0, W - 1, yy, p.dark); P.hline(0, W - 1, yy + 1, C.shade(p.floor, 0.12), 0.5); yy += step; step += 3; }
+    for (let k = -12; k <= 12; k++) P.line(160 + k * 8, HZ, 160 + k * 46, H - 1, p.dark, 0.6);
+    P.hline(0, W - 1, HZ, C.shade(p.wallT, 0.1)); P.hline(0, W - 1, HZ + 1, p.dark);
+    P.noise(rng, 0.05);
+    if (dtype === 'thorn') for (let i = 0; i < 16; i++) { let x = rng.int(0, W - 1); for (let y = 0; y < HZ - 2; y++) { x = BM.clamp(x + rng.int(-1, 1), 0, W - 1); P.set(x, y, '#2e4a22'); if (y % 7 === 0) { P.set(x + 1, y, '#c8c090'); P.set(x - 1, y + 1, '#3e5e2c'); } } }
+    if (dtype === 'blood') { for (let i = 0; i < 12; i++) { const x = rng.int(0, W - 1), l = rng.int(10, 60); P.vline(x, 0, l, BM.gore() ? '#6a0c10' : '#3a1418'); P.set(x, l + 1, BM.gore() ? '#8a1014' : '#4a1a1e'); } P.ellipse(160, 150, 120, 14, BM.gore() ? '#4a0a0c' : '#2a1416', 0.6); }
+    if (dtype === 'memory') for (let i = 0; i < 60; i++) { const x = rng.int(0, W - 1), y = rng.int(0, H - 1), c = rng.pick(['#9ad0ff', '#c0a0ff', '#ffffff']); P.set(x, y, c); if (rng.chance(0.3)) { P.set(x + 1, y, c, 0.5); P.set(x, y + 1, c, 0.5); } }
+    // Fackeln mit Pixel-Lichthof
+    for (const x of [52, 266]) {
+      P.circle(x + 1, 40, 14, '#ff9a30', 0.06); P.circle(x + 1, 40, 9, '#ff9a30', 0.1);
+      P.rect(x, 42, 3, 12, '#4a3018'); P.rect(x - 1, 40, 5, 3, '#2a1a10');
+      P.poly([[x - 2, 40], [x + 1.5, 31], [x + 5, 40]], '#ff9a30'); P.poly([[x, 40], [x + 1.5, 35], [x + 3, 40]], '#ffe080');
+    }
     return P.canvas();
   }); }
 
+  // Geordnetes Dithering (Bayer 4×4, 2×2-Pixel-Punkte): Stufe 1–3 = 25/50/75 % Schatten
+  function dither(level, rgb) {
+    return memo('dither|' + level + '|' + (rgb || ''), () => {
+      const B = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+      const c = document.createElement('canvas'); c.width = 32; c.height = 32;
+      const g = c.getContext('2d'); g.fillStyle = rgb ? 'rgb(' + rgb + ')' : '#000';
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (B[y % 4][x % 4] < level * 4) g.fillRect(x * 2, y * 2, 2, 2);
+      return c;
+    });
+  }
+
   function clear() { cache.clear(); }
 
-  return { character, monster, tile, obj, item, drawItemIcon, townScene, titleScene, battleBg, clear };
+  return { character, monster, tile, obj, item, drawItemIcon, townScene, titleScene, battleBg, dither, clear };
 })();

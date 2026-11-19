@@ -57,7 +57,7 @@ BM.Scenes.create = {
     BM.UI.text(ctx, BM.t('cr_title'), BM.W / 2, 24, { size: 30, align: 'center', color: BM.C.gold2 });
     // Vorschau
     BM.UI.panel(ctx, 30, 80, 440, 440);
-    ctx.fillStyle = 'rgba(139,30,26,0.18)'; ctx.beginPath(); ctx.ellipse(250, 330, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
+    BM.UI.shadow(ctx, 250, 330, 110, 22, 0.25, '139,30,26');
     const bob = Math.round(Math.sin(this.t * 2) * 3);
     ctx.drawImage(BM.Spr.character(this.preview()), 138, 100 + bob, 224, 224);
     const race = BM.RACES[this.c.race], role = BM.ROLES[this.c.role];
