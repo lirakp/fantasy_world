@@ -44,7 +44,7 @@ BM.Scenes.battle = {
     this.party.forEach((u, i) => { u.size = 96; u.x = 700 - (i % 2) * 60; u.y = 50 + i * 78; });
   },
   wait(sec) { return new Promise((res) => this.timers.push({ t: sec, res })); },
-  say(text, color) { this.banner = { text, color: color || BM.C.ink, t: 1.2 }; },
+  say(text, color) { this.banner = { text, color: color || BM.C.ink, t: 0.9 }; },
   float(u, text, color, big) {
     this.floats.push({ x: u.x + u.size / 2 + (Math.random() - 0.5) * 20, y: u.y + u.size * 0.3, text: String(text), color, t: 1.1, big });
   },

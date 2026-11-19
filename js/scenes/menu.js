@@ -61,7 +61,9 @@ BM.Scenes.settings = {
     this.p = p || {};
     const S = BM.S.settings;
     const cyc = (arr, key, dir, after) => () => { const i = arr.indexOf(S[key]); S[key] = arr[(i + dir + arr.length) % arr.length]; BM.saveSettings(); if (after) after(); };
-    const vol = (key, d) => () => { S[key] = Math.round(BM.clamp(S[key] + d, 0, 1) * 10) / 10; BM.saveSettings(); BM.Audio.applyVolume(); };
+    const vol = (key, d) => () => { S[key] = Math.round(BM.clamp(S[key] + d, 0, 1) * 10) / 10; BM.saveSettings(); BM.Audio.applyVolume(); BM.Audio.sfx('coin'); };
+    // Bestätigen/Antippen des Namens: +10 %, nach 100 % wieder auf 0 %
+    const volCycle = (key) => () => { S[key] = S[key] >= 1 ? 0 : Math.round((S[key] + 0.1) * 10) / 10; BM.saveSettings(); BM.Audio.applyVolume(); BM.Audio.sfx('coin'); };
     const diffs = ['easy', 'normal', 'hard', 'nightmare'], touches = ['auto', 'on', 'off'];
     const toggleContent = async () => {
       if (S.content === 'u18') {
@@ -74,8 +76,8 @@ BM.Scenes.settings = {
       { label: () => BM.t('s_lang'), value: () => (S.lang === 'de' ? 'Deutsch' : 'English'), onLeft: cyc(['de', 'en'], 'lang', -1), onRight: cyc(['de', 'en'], 'lang', 1), onSelect: cyc(['de', 'en'], 'lang', 1) },
       { label: () => BM.t('s_diff'), value: () => BM.t('d_' + S.difficulty), onLeft: cyc(diffs, 'difficulty', -1), onRight: cyc(diffs, 'difficulty', 1), onSelect: cyc(diffs, 'difficulty', 1), hint: () => BM.t('d_' + S.difficulty + '_h') },
       { label: () => BM.t('s_content'), value: () => BM.t(S.content === 'adult' ? 'c_adult' : 'c_u18'), onLeft: toggleContent, onRight: toggleContent, onSelect: toggleContent },
-      { label: () => BM.t('s_sfx'), value: () => Math.round(S.sfx * 100) + ' %', onLeft: vol('sfx', -0.1), onRight: vol('sfx', 0.1), onSelect: vol('sfx', 0.1) },
-      { label: () => BM.t('s_music'), value: () => Math.round(S.music * 100) + ' %', onLeft: vol('music', -0.1), onRight: vol('music', 0.1), onSelect: vol('music', 0.1) },
+      { label: () => BM.t('s_sfx'), value: () => Math.round(S.sfx * 100) + ' %', onLeft: vol('sfx', -0.1), onRight: vol('sfx', 0.1), onSelect: volCycle('sfx') },
+      { label: () => BM.t('s_music'), value: () => Math.round(S.music * 100) + ' %', onLeft: vol('music', -0.1), onRight: vol('music', 0.1), onSelect: volCycle('music') },
       { label: () => BM.t('s_shake'), value: () => BM.t(S.shake ? 'on' : 'off'), onLeft: () => { S.shake = !S.shake; BM.saveSettings(); }, onRight: () => { S.shake = !S.shake; BM.saveSettings(); }, onSelect: () => { S.shake = !S.shake; BM.saveSettings(); } },
       { label: () => BM.t('s_touch'), value: () => BM.t(S.touch), onLeft: cyc(touches, 'touch', -1), onRight: cyc(touches, 'touch', 1), onSelect: cyc(touches, 'touch', 1) },
       { label: () => BM.t('s_full'), value: () => BM.t(document.fullscreenElement ? 'on' : 'off'), onSelect: () => {

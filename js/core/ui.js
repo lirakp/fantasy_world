@@ -117,9 +117,11 @@ BM.UI = (function () {
           if (inRect(c, r)) {
             this.sel = i;
             const cur = this.items[i];
-            if (cur.onRight && c.x > r.x + r.w * 0.6) { cur.onRight(); BM.Audio.sfx('select'); }
-            else if (cur.onLeft && c.x > r.x + r.w * 0.45) { cur.onLeft(); BM.Audio.sfx('select'); }
-            else this.activate();
+            // Klick auf den Wert: linke Hälfte (◀) verringert, rechte Hälfte (▶) erhöht
+            if ((cur.onLeft || cur.onRight) && r.vx0 !== undefined && c.x >= r.vx0 - 12) {
+              const fn = c.x < (r.vx0 + r.vx1) / 2 ? cur.onLeft : cur.onRight;
+              if (fn) { fn(); BM.Audio.sfx('select'); }
+            } else this.activate();
           }
         });
       }
@@ -154,7 +156,9 @@ BM.UI = (function () {
         if (it.value !== undefined) {
           const v = typeof it.value === 'function' ? it.value() : it.value;
           const arrows = it.onLeft || it.onRight;
-          text(ctx, arrows ? '◀ ' + v + ' ▶' : v, r.x + r.w - 12, r.y + (r.h - o.size) / 2 - 1, { size: o.size, color: sel ? BM.C.gold2 : BM.C.dim, align: 'right' });
+          const vs = arrows ? '◀ ' + v + ' ▶' : v;
+          r.vx1 = r.x + r.w - 12; r.vx0 = r.vx1 - measure(ctx, vs, o.size);
+          text(ctx, vs, r.vx1, r.y + (r.h - o.size) / 2 - 1, { size: o.size, color: sel ? BM.C.gold2 : BM.C.dim, align: 'right' });
         }
       }
       if (this.scroll > 0) text(ctx, '▲', o.x + o.w - 14, o.y - 16, { size: 12, color: BM.C.dim });
@@ -175,6 +179,9 @@ BM.Overlays = {
   update(dt) {
     const top = this.stack[this.stack.length - 1];
     if (top) top.update(dt);
+  },
+  // Einblendungen laufen immer ab, auch wenn kein Dialog offen ist
+  tickToasts(dt) {
     for (const t of this.toasts) t.t -= dt;
     this.toasts = this.toasts.filter((t) => t.t > 0);
   },
@@ -193,7 +200,7 @@ BM.Overlays = {
   },
 };
 
-BM.toast = (text, color) => { BM.Overlays.toasts.push({ text, color, t: 2.6 }); if (BM.Overlays.toasts.length > 4) BM.Overlays.toasts.shift(); };
+BM.toast = (text, color) => { BM.Overlays.toasts.push({ text, color, t: 1.4 }); if (BM.Overlays.toasts.length > 3) BM.Overlays.toasts.shift(); };
 
 // Nachricht mit Weiter-Taste; optional Titel und Farbe
 BM.msg = (text, o) => new Promise((resolve) => {

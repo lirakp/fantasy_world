@@ -45,7 +45,7 @@
       BM.Input.update(dt);
       if (BM.Overlays.active()) BM.Overlays.update(dt);
       else if (BM.scene) BM.scene.update(dt);
-      else BM.Overlays.update(dt);
+      BM.Overlays.tickToasts(dt);
       ctx.setTransform(BM.scale, 0, 0, BM.scale, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = BM.C.bg; ctx.fillRect(0, 0, BM.W, BM.H);
