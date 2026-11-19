@@ -9,6 +9,8 @@ BM.Scenes.explore = {
     this.t = 0; this.busy = false; this.facing = 1; this.shake = 0;
     this.anim = null; this.cam = null; this.flash = 0;
     BM.Audio.ambience(this.d.type);
+    // Sicherheitsnetz: versperrte Wege (auch in alten Spielständen) reparieren
+    if (BM.Dungeon.ensureReachable(this.m)) BM.saveGame(true);
     this.fov();
     if (p.result) this.afterBattle(p.result, p.monId);
     else if (p.fresh) this.intro();
@@ -53,7 +55,6 @@ BM.Scenes.explore = {
       if (o.kind === 'chest' && !o.open) { await this.openChest(o); this.endTurn(); return; }
       if (o.kind === 'seal') { if (fresh) await this.trySeal(); return; }
       if (o.kind === 'orb' && !o.used) { if (fresh) await this.memoryLoop(o); return; }
-      if (o.kind === 'chest_open') return;
       if (o.kind === 'tablet' && !o.read) await this.readTablet(o);
       if (o.kind === 'supply') { o.gone = true; const n = BM.rand.int(2, 4); BM.S.run.rations += n; BM.Audio.sfx('chest'); BM.toast(BM.t('dg_supply', { n })); }
     }
@@ -289,7 +290,7 @@ BM.Scenes.explore = {
     if (!(await BM.confirmBox(BM.t('dg_stairs')))) return;
     const d = this.d;
     d.state.floor++;
-    d.state.map = BM.Dungeon.genFloor(d, d.state.floor);
+    d.state.map = BM.Dungeon.genFloor(d, d.state.floor); // genFloor prüft die Erreichbarkeit selbst
     this.cam = null; this.anim = null;
     this.fov();
     BM.Audio.sfx('door');

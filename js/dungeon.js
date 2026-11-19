@@ -55,9 +55,11 @@ BM.Dungeon = (function () {
     const objs = [], mons = [];
     const occupied = new Set();
     const key = (x, y) => y * W + x;
-    const freeIn = (r, tries) => {
-      for (let k = 0; k < (tries || 30); k++) {
-        const x = rng.int(r.x, r.x + r.w - 1), y = rng.int(r.y, r.y + r.h - 1);
+    // interior=true: nie auf Randfelder, an denen Gänge in den Raum münden
+    const freeIn = (r, interior) => {
+      const m = interior ? 1 : 0;
+      for (let k = 0; k < 30; k++) {
+        const x = rng.int(r.x + m, r.x + r.w - 1 - m), y = rng.int(r.y + m, r.y + r.h - 1 - m);
         if (!occupied.has(key(x, y))) { occupied.add(key(x, y)); return { x, y }; }
       }
       return null;
@@ -91,10 +93,10 @@ BM.Dungeon = (function () {
     if (d.type === 'memory') {
       const pool = rooms.map((_, i) => i).filter((i) => i !== start && !rooms[i].safe);
       rng.shuffle(pool);
-      for (let k = 0; k < 2 && pool.length; k++) put('orb', freeIn(rooms[pool.pop()]), { loop: rng.chance(0.5) ? 'active' : 'inactive', used: false });
+      for (let k = 0; k < 2 && pool.length; k++) put('orb', freeIn(rooms[pool.pop()], true), { loop: rng.chance(0.5) ? 'active' : 'inactive', used: false });
     }
     // Truhen
-    rooms.forEach((r, i) => { if (i !== start && rng.chance(T.chest)) put('chest', freeIn(r), { open: false }); });
+    rooms.forEach((r, i) => { if (i !== start && rng.chance(T.chest)) put('chest', freeIn(r, true), { open: false }); });
     // Fallen
     if (d.type === 'thorn') {
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -130,10 +132,73 @@ BM.Dungeon = (function () {
       mons.push({ id: 'boss', x: gr.cx, y: gr.cy, pack, boss: true });
     }
 
-    return {
+    const map = {
       floor, w: W, h: H, tiles, room, rooms, objs, mons, seen: new Array(W * H).fill(0),
       px: rooms[start].cx, py: rooms[start].cy, goalRoom: goal, steps: 0,
     };
+    ensureReachable(map);
+    return map;
+  }
+
+  // ---------- Erreichbarkeit: Hindernis-Objekte dürfen nie Wege versperren ----------
+  const BLOCKING = (o) => !o.gone && !o.deco && (o.kind === 'chest' || o.kind === 'seal' || (o.kind === 'orb' && !o.used));
+
+  // Prüft, ob vom Spieler aus jedes freie Feld und jedes Hindernis-Objekt erreichbar ist
+  function checkReach(m) { return reachProblems(m) === 0; }
+  // Anzahl unerreichbarer freier Felder + unerreichbarer Hindernis-Objekte
+  function reachProblems(m) {
+    const W = m.w, blocked = new Set(m.objs.filter(BLOCKING).map((o) => o.y * W + o.x));
+    const seen = new Uint8Array(W * m.h), q = [m.py * W + m.px];
+    seen[q[0]] = 1;
+    for (let i = 0; i < q.length; i++) {
+      const c = q[i], x = c % W, y = (c / W) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, n = ny * W + nx;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= m.h || seen[n] || !m.tiles[n] || blocked.has(n)) continue;
+        seen[n] = 1; q.push(n);
+      }
+    }
+    let bad = 0;
+    for (let k = 0; k < m.tiles.length; k++) if (m.tiles[k] && !blocked.has(k) && !seen[k]) bad++;
+    for (const k of blocked) {
+      const x = k % W, y = (k / W) | 0;
+      if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => seen[(y + dy) * W + x + dx])) bad++;
+    }
+    return bad;
+  }
+
+  // Verschiebt störende Hindernisse auf ein sicheres Feld (bei der Erzeugung und für alte Spielstände)
+  function ensureReachable(m) {
+    let bad = reachProblems(m);
+    if (!bad) return 0;
+    const W = m.w, rng = BM.RNG((m.w * 31 + m.h * 7 + m.floor) >>> 0);
+    const taken = (x, y) => (x === m.px && y === m.py) || m.objs.some((o) => !o.gone && o.x === x && o.y === y) || m.mons.some((o) => o.x === x && o.y === y);
+    let moved = 0;
+    for (const o of m.objs.filter(BLOCKING)) {
+      if (!bad) break;
+      // Würde es ohne dieses Objekt besser? Dann ist es (mit)schuld und wird verschoben
+      o.gone = true; const without = reachProblems(m); o.gone = false;
+      if (without >= bad) continue;
+      const ox = o.x, oy = o.y, ri = m.room[oy * W + ox];
+      const rooms = ri >= 0 ? [m.rooms[ri], ...rng.shuffle(m.rooms.slice())] : rng.shuffle(m.rooms.slice());
+      let best = null, bestBad = bad;
+      for (const r of rooms) {
+        const cands = [];
+        for (let y = r.y + 1; y < r.y + r.h - 1; y++) for (let x = r.x + 1; x < r.x + r.w - 1; x++) if (m.tiles[y * W + x] && !taken(x, y)) cands.push([x, y]);
+        rng.shuffle(cands);
+        for (const [x, y] of cands.slice(0, 12)) {
+          o.x = x; o.y = y;
+          const b = reachProblems(m);
+          if (b < bestBad) { bestBad = b; best = [x, y]; if (!b) break; }
+        }
+        if (best && !bestBad) break;
+      }
+      if (best) { o.x = best[0]; o.y = best[1]; bad = bestBad; moved++; }
+      else { o.x = ox; o.y = oy; }
+    }
+    // Notfall: Truhen, die sich nicht verschieben lassen, verschwinden (Rätsel-Siegel bleibt immer)
+    if (bad) for (const o of m.objs.filter(BLOCKING)) { if (o.kind === 'seal') continue; o.gone = true; const b = reachProblems(m); if (b < bad) { bad = b; moved++; } else o.gone = false; }
+    return moved;
   }
 
   function bfs(tiles, W, H, sx, sy) {
@@ -181,5 +246,5 @@ BM.Dungeon = (function () {
     return vis;
   }
 
-  return { genFloor, prepare, computeFov, bfs, TYPE };
+  return { genFloor, prepare, computeFov, bfs, TYPE, checkReach, ensureReachable };
 })();
