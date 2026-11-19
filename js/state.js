@@ -1,6 +1,6 @@
 // Einstellungen und Spielstand (localStorage, immer abgesichert)
 BM.S = {
-  settings: { lang: 'de', difficulty: 'normal', content: 'u18', sfx: 0.6, music: 0.5, shake: true, touch: 'auto' },
+  settings: { lang: 'de', difficulty: 'normal', content: 'u18', sfx: 0.6, music: 0.5, amb: 0.5, shake: true, touch: 'auto' },
   run: null,
 };
 

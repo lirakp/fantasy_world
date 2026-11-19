@@ -64,6 +64,15 @@ BM.Loot = (function () {
   };
   const SIN_IDS = Object.keys(SINS);
 
+  // Sekundärflüche der Vorbesitzer (Schwarzmarkt-Ware). Die Kirche bricht sie für 10–30 Gold.
+  const CURSES = {
+    madness: { name: { de: 'Wahnsinn', en: 'Madness' }, desc: { de: '15 % Chance, im Kampf einen Verbündeten anzugreifen', en: '15% chance to attack an ally in battle' } },
+    misfortune: { name: { de: 'Pech', en: 'Misfortune' }, desc: { de: '−10 % Krit., Gegner treffen kritischer, −25 % Münzen', en: '−10% crit, enemies crit more often, −25% coin' } },
+    frailty: { name: { de: 'Siechtum', en: 'Frailty' }, desc: { de: '−25 % max. LP', en: '−25% max HP' } },
+    bloodlust: { name: { de: 'Blutdurst', en: 'Bloodthirst', de_soft: 'Rastlosigkeit', en_soft: 'Restlessness' }, desc: { de: 'Verliert jede Kampfrunde 3 % max. LP', en: 'Loses 3% max HP every battle round' } },
+  };
+  const CURSE_IDS = Object.keys(CURSES);
+
   function make(o) {
     const rng = o.rng || BM.RNG(BM.newSeed());
     const base = o.base || rng.pick(BASE_IDS), B = BASES[base], rank = o.rank || 'D', ri = BM.rankIdx(rank);
@@ -143,6 +152,8 @@ BM.Loot = (function () {
       for (const e of it.effects) out.push({ t: '◆ ' + BM.L(EFFECTS[e.id].name).replace('{v}', e.v), c: C.green });
       if (it.tribute) out.push({ t: BM.t('item_tribute') + ' – ' + BM.L(TRIBUTES[it.tribute.kind].name).replace('{v}', it.tribute.v) + (it.damped ? ' (' + BM.t('item_damped') + ')' : ''), c: it.damped ? C.dim : '#e07060' });
       if (it.sin) out.push({ t: BM.t('item_sin') + ' – ' + sinName(it.sin) + ': ' + BM.L(SINS[it.sin].desc) + (it.damped ? ' (' + BM.t('item_damped') + ')' : ''), c: it.damped ? C.dim : '#ff5040' });
+      if (it.black && it.curseHidden) out.push({ t: BM.t('item_curse_risk'), c: '#c080ff' });
+      else if (it.curse) out.push({ t: BM.t('item_curse') + ' – ' + BM.L(CURSES[it.curse].name) + ': ' + BM.L(CURSES[it.curse].desc), c: '#c080ff' });
     }
     out.push({ t: BM.t('item_value') + ': ' + BM.money(it.value), c: C.dim });
     return out;
@@ -171,5 +182,21 @@ BM.Loot = (function () {
     return out;
   }
 
-  return { BASES, EFFECTS, TRIBUTES, SINS, make, name, describe, tributeOf, sinOf, activationCost, dampCost, drop, shopStock, sinName };
+  // Die Rostige Münze: ungeklärte A–SS-Ware aus Leichenplünderung, illegal geweckt, zu 90 % verflucht
+  function blackStock(rank, seed) {
+    const rng = BM.RNG(seed ^ 0x9e3779b9), pr = BM.rankIdx(rank), out = [];
+    for (let i = 0; i < 4; i++) {
+      const r = BM.clamp(3 + rng.weighted([[0, 60], [1, 30], [2, 10]]) + (pr >= 4 ? 1 : 0), 3, 5);
+      const it = make({ rank: BM.RANKS[r], rng });
+      it.identified = true; it.black = true; it.curseHidden = true;
+      it.curse = rng.chance(0.9) ? rng.pick(CURSE_IDS) : null;
+      it.price = Math.round(it.value * 0.45);
+      out.push(it);
+    }
+    return out;
+  }
+  function curseOf(it) { return it && it.curse && !it.curseHidden ? it.curse : null; }
+  function uncurseCost(it) { return [1000, 1000, 1000, 1000, 2000, 3000][BM.rankIdx(it.rank)]; }
+
+  return { BASES, EFFECTS, TRIBUTES, SINS, CURSES, make, name, describe, tributeOf, sinOf, curseOf, activationCost, dampCost, uncurseCost, drop, shopStock, blackStock, sinName };
 })();

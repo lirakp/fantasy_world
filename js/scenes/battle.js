@@ -28,11 +28,12 @@ BM.Scenes.battle = {
     this.party = run.party.map((c, i) => {
       const s = BM.stats(c);
       c.hp = Math.min(c.hp, s.mhp); c.mp = Math.min(c.mp, s.mmp);
-      return new BM.Unit({ side: 'party', c, name: c.name, src: c, mhp: s.mhp, mmp: s.mmp, atk: s.atk, def: s.def, mag: s.mag, spd: s.spd, crit: s.crit, fx: s.fx, idx: i,
+      return new BM.Unit({ side: 'party', c, name: c.name, src: c, mhp: s.mhp, mmp: s.mmp, atk: s.atk, def: s.def, mag: s.mag, spd: s.spd, crit: s.crit, fx: s.fx, curses: s.curses, idx: i,
         trib: BM.Loot.tributeOf(c.equip.weapon), armorTrib: BM.Loot.tributeOf(c.equip.armor), sin: BM.Loot.sinOf(c.equip.weapon) });
     });
     this.layout();
     BM.Audio.ambience(p.dtype);
+    BM.Audio.music(p.boss ? 'boss' : 'battle');
     this.loop();
   },
   layout() {
@@ -91,6 +92,7 @@ BM.Scenes.battle = {
         if (u.fx.regen) { this.heal(u, u.fx.regen, true); }
         if (u.fx.manaflow) u.mp = Math.min(u.mmp, u.mp + u.fx.manaflow);
         if (u.armorTrib && this.round > 1) this.payTribute(u, u.armorTrib, true);
+        if (u.curses.includes('bloodlust') && this.round > 1) { const d = Math.max(1, Math.round(u.mhp * 0.03)); u.hp = Math.max(1, u.hp - d); this.float(u, '−' + d, '#c080ff'); }
       }
       for (const [k, col] of [['poison', '#8adf5a'], ['burn', '#ff8a30'], ['bleed', '#d02020']]) {
         if (u.b[k] > 0) {
@@ -224,8 +226,11 @@ BM.Scenes.battle = {
       await this.wait(0.6); return;
     }
     let targets = S.target === 'enemies' ? this.aliveE() : [a.target && a.target.alive ? a.target : this.aliveE()[0]];
-    // Zorn: trifft manchmal einen Verbündeten
-    if (u.sin === 'wrath' && S.target === 'enemy' && this.aliveP().length > 1 && BM.rand.chance(0.12)) {
+    // Wahnsinn (Fluch) und Zorn (Sünde): treffen manchmal einen Verbündeten
+    if (u.curses.includes('madness') && S.target === 'enemy' && this.aliveP().length > 1 && BM.rand.chance(0.15)) {
+      targets = [BM.rand.pick(this.aliveP().filter((x) => x !== u))];
+      this.say(BM.t('bt_madness', { n: u.name }), '#c080ff');
+    } else if (u.sin === 'wrath' && S.target === 'enemy' && this.aliveP().length > 1 && BM.rand.chance(0.12)) {
       targets = [BM.rand.pick(this.aliveP().filter((x) => x !== u))];
       this.say(BM.t('bt_wrath_ally', { n: u.name }), BM.C.blood);
     }
@@ -248,7 +253,7 @@ BM.Scenes.battle = {
     if (att.sin === 'sloth') dmg *= 1.4;
     if (tgt.undead && att.fx && att.fx.holy) dmg *= 1 + att.fx.holy / 100;
     if (tgt.undead && S.holy) dmg *= 2;
-    let crit = BM.rand.chance((att.crit + (S.crit || 0) + (att.sin === 'pride' ? 20 : 0)) / 100);
+    let crit = BM.rand.chance((att.crit + (S.crit || 0) + (att.sin === 'pride' ? 20 : 0) + (tgt.curses && tgt.curses.includes('misfortune') ? 10 : 0)) / 100);
     if (crit) dmg *= 1.75;
     if (tgt.defending) dmg *= 0.5;
     dmg = Math.max(1, Math.round(dmg));
@@ -320,7 +325,8 @@ BM.Scenes.battle = {
     for (const e of this.enemies) { xp += e.xp; gold += e.gold; }
     const alive = this.aliveP();
     let goldMult = D.gold * (1 + BM.RACES[run.party[0].race].goldBonus);
-    for (const u of alive) { if (u.fx.fortune) goldMult += u.fx.fortune / 100; if (u.sin === 'greed') goldMult += 0.5; }
+    for (const u of alive) { if (u.fx.fortune) goldMult += u.fx.fortune / 100; if (u.sin === 'greed') goldMult += 0.5; if (u.curses.includes('misfortune')) goldMult -= 0.25; }
+    goldMult = Math.max(0.1, goldMult);
     for (const u of alive) if (u.sin === 'greed') run.gold = Math.floor(run.gold * 0.97);
     gold = Math.round(gold * goldMult * BM.rand.range(0.8, 1.2));
     run.gold += gold;

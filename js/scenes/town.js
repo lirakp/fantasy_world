@@ -109,6 +109,7 @@ BM.Scenes.town = {
     const run = BM.S.run, TM = BM.TownMap;
     if (!run.shopSeed) run.shopSeed = BM.newSeed();
     if (!run.shop || run.shopFor !== run.shopSeed) { run.shop = BM.Loot.shopStock(run.rank, run.shopSeed); run.shopFor = run.shopSeed; }
+    if (!run.black || run.blackFor !== run.shopSeed) { run.black = BM.Loot.blackStock(run.rank, run.shopSeed); run.blackFor = run.shopSeed; }
     this.t = 0; this.view = null; this.sub = null; this.anim = null; this.cam = null;
     const spot = p && p.at ? TM.SPOTS[p.at] : null;
     if (spot || !run.townPos || !TM.passable(run.townPos.x, run.townPos.y)) run.townPos = Object.assign({ face: 1 }, spot || TM.SPOTS.start);
@@ -130,6 +131,7 @@ BM.Scenes.town = {
     const run = BM.S.run, F = BM.Flow, self = this;
     const back = () => this.open(null);
     this.view = view; this.detail = null; this.info = null;
+    BM.Audio.music(view === 'black' || view === 'black_sell' ? 'black' : (run.bloodMoon ? 'bloodtown' : 'town'));
     if (!view) { this.sub = null; return; }
     let items = [];
     const mk = (items, onCancel) => new BM.UI.Menu(items, { x: 354, y: 140, w: 572, rowH: 34, size: 18, maxRows: 7, onCancel: onCancel || back });
@@ -254,6 +256,7 @@ BM.Scenes.town = {
         { label: () => BM.t('ch_revive'), value: () => BM.money(revCost), disabled: () => !run.party.some((c) => !c.alive || c.hp <= 0),
           onSelect: () => { if (!F.pay(revCost)) return; this.healParty(true); BM.msg(BM.t('ch_healed')); } },
         { label: () => BM.t('ch_damp'), onSelect: () => this.open('damp') },
+        { label: () => BM.t('ch_uncurse'), onSelect: () => this.open('uncurse') },
         { label: () => BM.t('back'), onSelect: back },
       ];
       this.sub = mk(items);
@@ -274,6 +277,72 @@ BM.Scenes.town = {
       if (!items.length) this.info = () => BM.t('ch_nodamp');
       items.push({ label: () => BM.t('back'), onSelect: () => this.open('church') });
       this.sub = mk(items, () => this.open('church'));
+      this.detail = () => { const it = this.sub.current(); return it && it.it ? it.it : null; };
+    } else if (view === 'uncurse') {
+      // Die Kirche nimmt den Sekundärfluch von Schwarzmarkt-Ware – der heimliche Bund mit der Rostigen Münze
+      this.title = BM.t('ch_uncurse');
+      const list = this.allItems().filter((e) => BM.Loot.curseOf(e.it));
+      items = list.map((e) => ({
+        label: () => BM.Loot.name(e.it), icon: BM.Spr.item(e.it.base, e.it.rank), it: e.it, value: () => BM.money(BM.Loot.uncurseCost(e.it)),
+        onSelect: async () => {
+          const cost = BM.Loot.uncurseCost(e.it);
+          if (!(await BM.confirmBox(BM.t('ch_uncurse_confirm', { item: BM.Loot.name(e.it), cost: BM.money(cost) })))) return;
+          if (!F.pay(cost)) return;
+          e.it.curse = null;
+          if (e.c) { const s = BM.stats(e.c); e.c.hp = Math.min(e.c.hp, s.mhp); }
+          BM.Audio.sfx('heal');
+          await BM.msg(BM.t('ch_uncursed', { item: BM.Loot.name(e.it) }));
+          this.open('uncurse');
+        },
+      }));
+      this.info = () => (items.length ? BM.t('ch_uncurse_info') : BM.t('ch_nocurse'));
+      items.push({ label: () => BM.t('back'), onSelect: () => this.open('church') });
+      this.sub = mk(items, () => this.open('church'));
+      this.detail = () => { const it = this.sub.current(); return it && it.it ? it.it : null; };
+    } else if (view === 'black') {
+      // Die Rostige Münze: geplünderte A–SS-Ware, illegal geweckt, meist verflucht
+      this.title = BM.t('t_black');
+      this.info = () => BM.t('bk_info');
+      items = run.black.map((it) => ({
+        label: () => BM.Loot.name(it), icon: BM.Spr.item(it.base, it.rank), it, value: () => BM.money(it.price),
+        onSelect: async () => {
+          if (!(await BM.confirmBox(BM.t('bk_buy_confirm', { item: BM.Loot.name(it), cost: BM.money(it.price) }), { color: '#c080ff' }))) return;
+          if (!F.pay(it.price)) return;
+          run.black.splice(run.black.indexOf(it), 1);
+          it.curseHidden = false; delete it.price;
+          run.inventory.push(it);
+          BM.saveGame(true);
+          if (it.curse) { BM.Audio.sfx('curse'); await BM.msg(BM.t('bk_cursed', { item: BM.Loot.name(it), curse: BM.L(BM.Loot.CURSES[it.curse].name) }), { color: '#c080ff', title: BM.t('item_curse') }); }
+          else await BM.msg(BM.t('bk_clean', { item: BM.Loot.name(it) }), { color: BM.C.gold });
+          this.open('black');
+        },
+      }));
+      if (!items.length) items.push({ label: () => BM.t('bk_empty'), disabled: true });
+      items.push({ label: () => BM.t('bk_fence') + ' →', onSelect: () => this.open('black_sell') });
+      items.push({ label: () => BM.t('back'), onSelect: () => this.open(null) });
+      this.sub = mk(items);
+      this.detail = () => { const it = this.sub.current(); return it && it.it ? it.it : null; };
+    } else if (view === 'black_sell') {
+      // Hehlerei: mehr Münzen als beim Konsortium, aber die Gilde schaut manchmal genauer hin
+      this.title = BM.t('t_black') + ' – ' + BM.t('bk_fence');
+      this.info = () => BM.t('bk_fence_info');
+      const price = (it) => Math.max(1, Math.round(it.value * 0.65));
+      items = run.inventory.map((it) => ({
+        label: () => BM.Loot.name(it), icon: BM.Spr.item(it.base, it.rank), it, value: () => BM.money(price(it)),
+        onSelect: async () => {
+          run.inventory.splice(run.inventory.indexOf(it), 1);
+          const p = price(it);
+          run.gold += p; BM.Audio.sfx('coin');
+          if (BM.rand.chance(0.1)) {
+            const fine = Math.round(p * 0.4); run.gold = Math.max(0, run.gold - fine);
+            await BM.msg(BM.t('bk_fined', { p: BM.money(p), fine: BM.money(fine) }), { color: BM.C.blood });
+          } else BM.toast(BM.t('mk_sold', { p: BM.money(p) }));
+          this.open('black_sell');
+        },
+      }));
+      if (!items.length) this.info = () => BM.t('mk_nothing');
+      items.push({ label: () => BM.t('back'), onSelect: () => this.open('black') });
+      this.sub = mk(items, () => this.open('black'));
       this.detail = () => { const it = this.sub.current(); return it && it.it ? it.it : null; };
     } else if (view === 'tavern') {
       this.title = BM.t('t_tavern');

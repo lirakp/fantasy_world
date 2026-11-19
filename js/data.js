@@ -214,15 +214,18 @@ BM.makeChar = (o) => {
 BM.stats = (c) => {
   const role = BM.ROLES[c.role], race = BM.RACES[c.race], L = c.level - 1;
   const g = (k) => (role.base[k] + role.grow[k] * L) * race.mult[k];
-  const s = { mhp: g('hp'), mmp: g('mp'), atk: g('atk'), def: g('def'), mag: g('mag'), spd: g('spd'), crit: 5 + race.crit, fx: {} };
+  const s = { mhp: g('hp'), mmp: g('mp'), atk: g('atk'), def: g('def'), mag: g('mag'), spd: g('spd'), crit: 5 + race.crit, fx: {}, curses: [] };
   for (const slot of ['weapon', 'armor', 'acc']) {
     const it = c.equip[slot];
     if (!it) continue;
     const pw = it.damped ? 0.87 : 1;
     for (const k of ['atk', 'def', 'mag', 'spd', 'mhp', 'mmp', 'crit']) if (it.stats[k]) s[k] += it.stats[k] * pw;
     if (it.identified) for (const e of it.effects) s.fx[e.id] = (s.fx[e.id] || 0) + e.v;
+    const cu = BM.Loot.curseOf(it); if (cu && !s.curses.includes(cu)) s.curses.push(cu);
   }
   if (s.fx.vigor) s.mhp *= 1 + s.fx.vigor / 100;
+  if (s.curses.includes('frailty')) s.mhp *= 0.75;
+  if (s.curses.includes('misfortune')) s.crit -= 10;
   if (s.fx.haste) s.spd *= 1 + s.fx.haste / 100;
   if (s.fx.keen) s.crit += s.fx.keen;
   for (const k of ['mhp', 'mmp', 'atk', 'def', 'mag', 'spd']) s[k] = Math.max(1, Math.round(s[k]));

@@ -78,6 +78,7 @@ BM.Scenes.settings = {
       { label: () => BM.t('s_content'), value: () => BM.t(S.content === 'adult' ? 'c_adult' : 'c_u18'), onLeft: toggleContent, onRight: toggleContent, onSelect: toggleContent },
       { label: () => BM.t('s_sfx'), value: () => Math.round(S.sfx * 100) + ' %', onLeft: vol('sfx', -0.1), onRight: vol('sfx', 0.1), onSelect: volCycle('sfx') },
       { label: () => BM.t('s_music'), value: () => Math.round(S.music * 100) + ' %', onLeft: vol('music', -0.1), onRight: vol('music', 0.1), onSelect: volCycle('music') },
+      { label: () => BM.t('s_amb'), value: () => Math.round(S.amb * 100) + ' %', onLeft: vol('amb', -0.1), onRight: vol('amb', 0.1), onSelect: volCycle('amb') },
       { label: () => BM.t('s_shake'), value: () => BM.t(S.shake ? 'on' : 'off'), onLeft: () => { S.shake = !S.shake; BM.saveSettings(); }, onRight: () => { S.shake = !S.shake; BM.saveSettings(); }, onSelect: () => { S.shake = !S.shake; BM.saveSettings(); } },
       { label: () => BM.t('s_touch'), value: () => BM.t(S.touch), onLeft: cyc(touches, 'touch', -1), onRight: cyc(touches, 'touch', 1), onSelect: cyc(touches, 'touch', 1) },
       { label: () => BM.t('s_full'), value: () => BM.t(document.fullscreenElement ? 'on' : 'off'), onSelect: () => {
@@ -88,7 +89,7 @@ BM.Scenes.settings = {
       if (await BM.confirmBox(BM.t('s_delete_confirm'))) { BM.deleteSave(); BM.toast(BM.t('s_deleted')); }
     } });
     items.push({ label: () => BM.t('back'), onSelect: () => this.back() });
-    this.menu = new BM.UI.Menu(items, { x: BM.W / 2 - 300, y: 100, w: 600, rowH: 34, size: 20, onCancel: () => this.back() });
+    this.menu = new BM.UI.Menu(items, { x: BM.W / 2 - 300, y: 96, w: 600, rowH: 31, size: 19, onCancel: () => this.back() });
   },
   back() { BM.saveSettings(); (this.p.back || (() => BM.go('title')))(); },
   update() { this.menu.update(); },

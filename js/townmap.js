@@ -9,6 +9,7 @@ BM.TownMap = (function () {
     { id: 'tavern', x: 11, y: 2, w: 6, h: 5, door: 3, view: 'tavern', style: 'tavern', label: 't_tavern' },
     { id: 'house', x: 18, y: 3, w: 5, h: 4, door: 2, view: null, style: 'house', label: null },
     { id: 'church', x: 24, y: 0, w: 7, h: 7, door: 3, view: 'church', style: 'church', label: 't_church' },
+    { id: 'black', x: 26, y: 15, w: 5, h: 4, door: 2, view: 'black', style: 'shack', label: 't_black' },
   ];
   // Deko und Interaktionen: kind, x, y, (w) ; act = Ansicht beim Anstoßen
   const PROPS = [
@@ -17,7 +18,7 @@ BM.TownMap = (function () {
     { kind: 'well', x: 25, y: 13 },
     { kind: 'lamp', x: 15, y: 10 }, { kind: 'lamp', x: 18, y: 10 }, { kind: 'lamp', x: 15, y: 16 }, { kind: 'lamp', x: 18, y: 16 }, { kind: 'lamp', x: 10, y: 8 }, { kind: 'lamp', x: 23, y: 8 },
     { kind: 'tree', x: 2, y: 11 }, { kind: 'tree', x: 3, y: 17 }, { kind: 'tree', x: 6, y: 19 }, { kind: 'tree', x: 11, y: 17 },
-    { kind: 'tree', x: 22, y: 18 }, { kind: 'tree', x: 29, y: 19 }, { kind: 'tree', x: 31, y: 11 }, { kind: 'tree', x: 28, y: 16 },
+    { kind: 'tree', x: 22, y: 18 }, { kind: 'tree', x: 29, y: 19 }, { kind: 'tree', x: 31, y: 11 },
     { kind: 'tree', x: 13, y: 20 }, { kind: 'tree', x: 32, y: 4 }, { kind: 'tree', x: 21, y: 14 },
     { kind: 'crate', x: 12, y: 13 }, { kind: 'crate', x: 3, y: 13 }, { kind: 'barrel', x: 17, y: 7 },
   ];
@@ -84,6 +85,7 @@ BM.TownMap = (function () {
         tavern: { wall: '#d8c8a0', roof: '#6a4a2e', trim: '#5a3a22' },
         house: { wall: '#c8b090', roof: '#8a3a2a', trim: '#6a4a30' },
         church: { wall: '#e0dccf', roof: '#4a5a7a', trim: '#9a9488' },
+        shack: { wall: '#4a3a30', roof: '#33261f', trim: '#241a14' },
       }[b.style];
       const roofH = Math.round(h * (b.style === 'church' ? 0.5 : 0.45));
       // Wand
@@ -119,6 +121,13 @@ BM.TownMap = (function () {
         P.rect(doorX - 6, h - 42, 28, 10, '#3a2a1a'); P.line(doorX - 2, h - 34, doorX + 18, h - 40, '#c8ccd4'); P.line(doorX - 2, h - 40, doorX + 18, h - 34, '#c8ccd4');
       }
       if (b.style === 'tavern') { P.hline(doorX + 18, doorX + 30, h - 44, '#3a2a1a'); P.rect(doorX + 22, h - 43, 10, 12, '#6a4a2a'); P.rect(doorX + 24, h - 41, 5, 7, '#e8b838'); P.rect(doorX + 29, h - 40, 2, 4, '#e8b838'); }
+      if (b.style === 'shack') {
+        // Bretterwand, rostiges Münzschild, rote Laterne
+        for (let x = 4; x < w - 2; x += 6) P.vline(x, roofH + 2, h - 4, C.shade(S.wall, -0.3));
+        P.line(w - 30, roofH + 6, w - 8, roofH + 14, C.shade(S.wall, 0.15));
+        P.hline(doorX + 18, doorX + 34, h - 46, '#241a14'); P.circle(doorX + 28, h - 38, 7, '#8a4a20'); P.circle(doorX + 28, h - 38, 5, '#b0662a'); P.set(doorX + 26, h - 40, '#d8904a'); P.rect(doorX + 27, h - 41, 2, 6, '#6a3416');
+        P.rect(doorX - 12, h - 40, 6, 8, '#2a1a14'); P.rect(doorX - 11, h - 39, 4, 6, '#ff3a20'); P.set(doorX - 10, h - 38, '#ffb090');
+      }
       if (b.style === 'church') {
         const cx = w / 2;
         P.rect(cx - 14, 0, 28, roofH + 4, S.wall); P.poly([[cx - 18, 30], [cx, 0], [cx + 18, 30]], S.roof);

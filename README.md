@@ -1,4 +1,4 @@
-# Codex des Blutmondes – Version 0.1.2
+# Codex des Blutmondes – Version 0.1.3
 
 Dungeon-Crawler mit rundenbasierten Kämpfen im Pixel-2D-Stil. Die Welt stammt aus dem Codex des Blutmondes.
 
