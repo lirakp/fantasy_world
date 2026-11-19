@@ -1,0 +1,40 @@
+{
+  "name": "codex-des-blutmondes",
+  "productName": "Codex des Blutmondes",
+  "version": "0.1.1",
+  "description": "Dungeon-RPG im Pixel-2D-Stil",
+  "author": "lirakp",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "io.github.lirakp.codexdesblutmondes",
+    "productName": "Codex des Blutmondes",
+    "directories": { "output": "dist" },
+    "files": ["index.html", "js/**/*", "fonts/**/*", "desktop/**/*", "package.json"],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Codex des Blutmondes",
+      "artifactName": "Codex-des-Blutmondes-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Codex-des-Blutmondes-${version}-portable.exe"
+    }
+  }
+}

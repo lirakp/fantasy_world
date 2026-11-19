@@ -1,9 +1,22 @@
-# Codex des Blutmondes – Version 0.1
+# Codex des Blutmondes – Version 0.1.1
 
 Dungeon-Crawler mit rundenbasierten Kämpfen im Pixel-2D-Stil. Die Welt stammt aus dem Codex des Blutmondes.
 
-## Starten
-`index.html` doppelklicken. Es braucht keinen Server und keine Installation. Ohne Internet fehlen nur die Pixel-Schriften; dann wird eine Ersatzschrift benutzt.
+## Download (Windows-PC-App)
+Unter **[Releases](https://github.com/lirakp/fantasy_world/releases/latest)** gibt es zwei Dateien:
+- **`Codex-des-Blutmondes-Setup-….exe`** – Installer mit Desktop-Verknüpfung
+- **`Codex-des-Blutmondes-…-portable.exe`** – ohne Installation, einfach doppelklicken
+
+Die App läuft in einem eigenen Fenster, auch ohne Internet. F11 schaltet Vollbild um, „Spiel beenden“ schließt die App.
+Da die App nicht signiert ist, kann Windows SmartScreen beim ersten Start warnen: „Weitere Informationen“ → „Trotzdem ausführen“.
+
+## Im Browser starten
+`index.html` doppelklicken. Es braucht keinen Server und keine Installation.
+
+## Neue App-Version veröffentlichen
+1. In `package.json` die `version` erhöhen (z. B. `0.1.2`).
+2. Committen und einen passenden Tag hochladen: `git tag v0.1.2` und `git push origin main --tags`.
+3. GitHub baut die App automatisch (Reiter „Actions“) und legt ein neues Release mit den `.exe`-Dateien an.
 
 ## Steuerung
 | | Tastatur | Gamepad | Touch / Maus |
